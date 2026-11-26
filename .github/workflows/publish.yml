@@ -13,10 +13,6 @@ on:
         description: Publish the verified artifact using npm Trusted Publishing
         type: boolean
         default: false
-      stage:
-        description: Stage the first npm release for owner verification
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -55,7 +51,7 @@ jobs:
             assert.equal(pkg.publishConfig.registry, "https://registry.npmjs.org/");
           '
       - name: Verify release tag matches the source commit
-        if: github.event_name == 'push' || inputs.publish || inputs.stage
+        if: github.event_name == 'push' || inputs.publish
         env:
           RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
         run: |
@@ -74,75 +70,6 @@ jobs:
           path: ${{ runner.temp }}/image-normalizer/*.tgz
           if-no-files-found: error
           retention-days: 7
-
-  stage:
-    needs: pack
-    if: github.event_name == 'workflow_dispatch' && inputs.stage && !inputs.publish
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    env:
-      NPM_CONFIG_USERCONFIG: ${{ runner.temp }}/npm-bootstrap.npmrc
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/download-artifact@v7
-        with:
-          name: npm-package
-          path: ${{ runner.temp }}/image-normalizer
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          registry-url: https://registry.npmjs.org/
-          package-manager-cache: false
-      - name: Start npm owner login
-        run: |
-          # 首次包注册由 GitHub 托管机器登录；只分享登录链接，不输出会话令牌。
-          (
-            set +e
-            npm login --registry=https://registry.npmjs.org/ --auth-type=web --browser=false > "$RUNNER_TEMP/npm-login.log" 2>&1
-            echo "$?" > "$RUNNER_TEMP/npm-login.status"
-          ) < /dev/null &
-          for attempt in $(seq 1 60); do
-            if grep -E '^https://www.npmjs.com/login' "$RUNNER_TEMP/npm-login.log" > "$RUNNER_TEMP/npm-login-url.txt"; then
-              exit 0
-            fi
-            if [ -f "$RUNNER_TEMP/npm-login.status" ]; then
-              echo "::error::npm login ended before generating a login URL."
-              exit 1
-            fi
-            sleep 1
-          done
-          echo "::error::npm login did not generate a login URL."
-          exit 1
-      - uses: actions/upload-artifact@v6
-        with:
-          name: npm-owner-login-url
-          path: ${{ runner.temp }}/npm-login-url.txt
-          if-no-files-found: error
-          retention-days: 1
-      - name: Wait for owner login
-        run: |
-          for attempt in $(seq 1 300); do
-            if [ -f "$RUNNER_TEMP/npm-login.status" ]; then
-              [ "$(cat "$RUNNER_TEMP/npm-login.status")" = 0 ]
-              exit
-            fi
-            sleep 2
-          done
-          echo "::error::Owner login was not completed within ten minutes."
-          exit 1
-      - name: Stage verified artifact for owner approval
-        run: |
-          cd "$RUNNER_TEMP/image-normalizer"
-          set -- ./*.tgz
-          [ "$#" -eq 1 ]
-          npm stage publish "$1" --ignore-scripts --access public --provenance --registry https://registry.npmjs.org/
-      - name: End bootstrap login
-        if: always()
-        run: |
-          npm logout --registry=https://registry.npmjs.org/ || true
-          rm -f "$NPM_CONFIG_USERCONFIG" "$RUNNER_TEMP/npm-login.log" "$RUNNER_TEMP/npm-login.status"
 
   publish:
     needs: pack

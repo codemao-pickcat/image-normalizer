@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.4
+
+- 首次注册 npm 包后，由 GitHub 托管 Actions 使用 OIDC 正式发布，消费端无需认证即可安装。
+- 清洗算法与 API 沿用 0.1.3。
+
 ## 0.1.3
 
 - 以 `@pickcat/image-normalizer` 发布到公开 npm registry，消费端安装无需 GitHub 令牌。

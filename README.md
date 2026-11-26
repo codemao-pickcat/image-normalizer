@@ -9,7 +9,7 @@
 要求 Node.js 24 或更高版本。公开包发布到 npmjs，安装无需登录、令牌或项目级 registry 配置：
 
 ```sh
-npm install --save-exact @pickcat/image-normalizer@0.1.3
+npm install --save-exact @pickcat/image-normalizer@0.1.4
 ```
 
 Linux/macOS 安装时编译内置 Node-API GIF 扩展，需要 C11 编译器与当前 Node.js 头文件。Debian/Ubuntu 构建镜像安装 `build-essential`；找不到头文件时设置 `NODE_INCLUDE_DIR`。运行镜像只需复制安装完成的依赖，无需编译器。Windows 使用 Sharp GIF 路径。支持平台上 native 编译或加载失败会直接失败，不静默降级。
