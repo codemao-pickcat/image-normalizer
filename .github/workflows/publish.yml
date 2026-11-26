@@ -114,8 +114,21 @@ jobs:
           else
             npm publish "$1" --ignore-scripts --access public --provenance --registry https://registry.npmjs.org/
           fi
-          npm view "@pickcat/image-normalizer@$version" dist.integrity --registry https://registry.npmjs.org/ > integrity.txt
-          [ "$(cat integrity.txt)" = "$expected" ]
+          # npm 接受发布后可能仍在处理新版本，等待公开 registry 提供同一产物。
+          published=""
+          for attempt in $(seq 1 30); do
+            published=$(npm view "@pickcat/image-normalizer@$version" dist.integrity --registry https://registry.npmjs.org/ 2>/dev/null) || published=""
+            if [ "$published" = "$expected" ]; then
+              break
+            fi
+            if [ -n "$published" ]; then
+              echo "::error::Published version has a different integrity."
+              exit 1
+            fi
+            sleep 10
+          done
+          [ "$published" = "$expected" ]
+          printf '%s\n' "$published" > integrity.txt
           shasum -a 256 "$1" > SHA256SUMS
       - name: Attach artifact to GitHub Release
         env:
