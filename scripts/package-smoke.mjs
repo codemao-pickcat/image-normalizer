@@ -47,7 +47,7 @@ try {
     join(directory, "host-worker.mjs"),
     `
 import { readFile, writeFile } from "node:fs/promises";
-import { normalizeWebp, normalizeGif, decodeGifFrames } from "@codemao-pickcat/image-normalizer/worker";
+import { normalizeWebp, normalizeGif, decodeGifFrames } from "@pickcat/image-normalizer/worker";
 let busy = false;
 process.once("disconnect", () => process.exit(0));
 process.on("message", async ({ id, task }) => {
@@ -111,9 +111,9 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { ImageNormalizer, ImageNormalizationError, ImageNormalizerPool, WebpNormalizer, GifNormalizer, assertValidGifFile } from "@codemao-pickcat/image-normalizer";
+import { ImageNormalizer, ImageNormalizationError, ImageNormalizerPool, WebpNormalizer, GifNormalizer, assertValidGifFile } from "@pickcat/image-normalizer";
 const require = createRequire(import.meta.url);
-assert.equal(require("@codemao-pickcat/image-normalizer").ImageNormalizer, ImageNormalizer);
+assert.equal(require("@pickcat/image-normalizer").ImageNormalizer, ImageNormalizer);
 assert(!Object.keys(require.cache).some((path) => /sharp|gif-native/.test(path)));
 const normalizer = new ImageNormalizer({ maxWorkers: 1 });
 try {
@@ -150,14 +150,11 @@ console.log("Installed package WebP/GIF and custom worker smoke passed");
   process.stdout.write(run(process.execPath, ["smoke.mjs"], directory));
   const installed = JSON.parse(
     await readFile(
-      join(
-        directory,
-        "node_modules/@codemao-pickcat/image-normalizer/package.json",
-      ),
+      join(directory, "node_modules/@pickcat/image-normalizer/package.json"),
       "utf8",
     ),
   );
-  assert.equal(installed.name, "@codemao-pickcat/image-normalizer");
+  assert.equal(installed.name, "@pickcat/image-normalizer");
 } finally {
   await rm(directory, { recursive: true, force: true });
 }

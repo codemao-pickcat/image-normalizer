@@ -6,19 +6,11 @@
 
 ## 安装
 
-要求 Node.js 24 或更高版本。包发布到 **GitHub Packages npm registry**：
-
-```ini
-# 项目 .npmrc；令牌通过用户配置或 CI secret 注入，不写入仓库。
-@codemao-pickcat:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
-```
+要求 Node.js 24 或更高版本。公开包发布到 npmjs，安装无需登录、令牌或项目级 registry 配置：
 
 ```sh
-npm install --save-exact @codemao-pickcat/image-normalizer@0.1.2
+npm install --save-exact @pickcat/image-normalizer@0.1.4
 ```
-
-GitHub Packages 的 npm 安装需要认证。GitHub Actions 使用获得包读取权限的 `GITHUB_TOKEN`；其他环境使用有 `read:packages` 权限的令牌。参见 [GitHub npm registry 文档](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry)。
 
 Linux/macOS 安装时编译内置 Node-API GIF 扩展，需要 C11 编译器与当前 Node.js 头文件。Debian/Ubuntu 构建镜像安装 `build-essential`；找不到头文件时设置 `NODE_INCLUDE_DIR`。运行镜像只需复制安装完成的依赖，无需编译器。Windows 使用 Sharp GIF 路径。支持平台上 native 编译或加载失败会直接失败，不静默降级。
 
@@ -28,7 +20,7 @@ Linux/macOS 安装时编译内置 Node-API GIF 扩展，需要 C11 编译器与�
 import {
   ImageNormalizer,
   ImageNormalizationError,
-} from "@codemao-pickcat/image-normalizer";
+} from "@pickcat/image-normalizer";
 
 const normalizer = new ImageNormalizer({ maxWorkers: 2, timeoutMs: 30_000 });
 await normalizer.start();
@@ -62,7 +54,7 @@ await normalizer.stop();
 
 宿主需要让其他媒体任务共享同一进程预算时，可显式设置 `ImageNormalizerPool({ workerUrl })`，再通过 `runCustom({ kind, payload }, { signal, timeoutMs })` 分配扩展任务。默认 worker 不接受扩展任务。扩展任务继续受同一并发、硬时限、任务身份、`result → ready` 握手和进程回收约束；宿主 worker 必须实现公开的 `ImageNormalizerRequest<Task>` / `ImageNormalizerResponse` 协议。
 
-`@codemao-pickcat/image-normalizer/worker` 导出 `normalizeWebp`、`normalizeGif` 和 `decodeGifFrames`，供宿主的隔离 worker 复用。此入口会加载 Sharp/native，**不能在 HTTP 主进程导入**。worker 路径和扩展载荷必须由受信任的宿主代码构造，不接受网络调用方指定的脚本或命令。开发环境需要 TS loader 时由宿主 JS bootstrap 显式注册，清洗器仍使用固定 heap 参数及环境白名单。
+`@pickcat/image-normalizer/worker` 导出 `normalizeWebp`、`normalizeGif` 和 `decodeGifFrames`，供宿主的隔离 worker 复用。此入口会加载 Sharp/native，**不能在 HTTP 主进程导入**。worker 路径和扩展载荷必须由受信任的宿主代码构造，不接受网络调用方指定的脚本或命令。开发环境需要 TS loader 时由宿主 JS bootstrap 显式注册，清洗器仍使用固定 heap 参数及环境白名单。
 
 ## 边界与预算
 
@@ -92,7 +84,9 @@ npm run check
 
 测试覆盖真实子进程复用与回收、取消/超时、畸形压缩流、元数据和尾载荷、GIF 时间轴/像素、native 与 JS 差分及安装包独立运行。`test:package` 在仓库外仅安装生产依赖并运行 WebP/GIF 清洗。
 
-所有 CI、构建和发布均使用 GitHub 托管 runner，未配置 self-hosted runner。更新版本与变更日志、推送 `vX.Y.Z` 标签后，发布工作流先执行完整校验，再构建并验证 `.tgz`，将同一产物发布到 GitHub Packages 并附到 GitHub Release。发布使用该仓库的 `GITHUB_TOKEN`，不需要长期发布令牌。
+所有 CI、构建和正式版本发布均使用 GitHub 托管 runner，未配置 self-hosted runner。更新版本与变更日志、推送 `vX.Y.Z` 标签后，发布工作流先执行完整校验，再构建并验证 `.tgz`，将同一产物发布到 npmjs 并附到 GitHub Release。也可手动运行工作流，只构建验证产物而不发布。
+
+npm Trusted Publisher 绑定 GitHub 组织 `codemao-pickcat`、仓库 `image-normalizer`、工作流 `publish.yml`，环境名留空，并允许直接 `npm publish`。发布 job 使用 `id-token: write` 获取短期 OIDC 身份并生成 provenance，不保存长期 npm 发布令牌。消费者只需公开 npm registry，不需要任何发布凭据。
 
 ## 许可证
 

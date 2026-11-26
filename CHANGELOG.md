@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.4
+
+- 首次注册 npm 包后，由 GitHub 托管 Actions 使用 OIDC 正式发布，消费端无需认证即可安装。
+- 清洗算法与 API 沿用 0.1.3。
+
+## 0.1.3
+
+- 以 `@pickcat/image-normalizer` 发布到公开 npm registry，消费端安装无需 GitHub 令牌。
+- 使用 GitHub 托管 runner 和 npm Trusted Publishing，保留真实安装校验及同一 tarball 的 Release 附件。
+- 清洗算法、API、原生编译与进程预算保持不变。
+
 ## 0.1.2
 
 - 为 Node.js 24+ CommonJS 工具提供默认导出条件，支持 Drizzle Kit 读取使用共享校验器的 schema。
