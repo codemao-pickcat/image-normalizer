@@ -1,0 +1,63 @@
+{
+  "name": "@codemao-pickcat/image-normalizer",
+  "version": "0.1.0",
+  "description": "Bounded WebP and GIF sanitization in isolated Node.js worker processes",
+  "type": "module",
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/codemao-pickcat/image-normalizer.git"
+  },
+  "homepage": "https://github.com/codemao-pickcat/image-normalizer#readme",
+  "bugs": {
+    "url": "https://github.com/codemao-pickcat/image-normalizer/issues"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "native/*.c",
+    "native/*.cjs",
+    "native/*.d.cts",
+    "native/build.mjs",
+    "native/vendor",
+    "README.md",
+    "LICENSE",
+    "NOTICE"
+  ],
+  "scripts": {
+    "install": "node native/build.mjs",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run build && vitest run",
+    "lint": "eslint src test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run format:check && npm run lint && npm run typecheck && npm test && npm run test:package",
+    "prepack": "npm run build",
+    "test:package": "node scripts/package-smoke.mjs"
+  },
+  "dependencies": {
+    "sharp": "0.35.3"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "@eslint/js": "10.0.1",
+    "eslint": "10.14.0",
+    "prettier": "3.9.10",
+    "typescript": "npm:@typescript/typescript6@6.0.2",
+    "typescript-eslint": "8.72.1",
+    "vitest": "4.1.10"
+  }
+}

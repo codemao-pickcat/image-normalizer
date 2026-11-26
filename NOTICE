@@ -1,0 +1,10 @@
+Image Normalizer
+Copyright (c) 2026 codemao-pickcat contributors
+
+The WebP/GIF validators, bounded process pool, native GIF encoder and their
+regression tests were extracted from codemao-pickcat/codemao-shequ-backend.
+This standalone package replaces application-specific error types and paths.
+
+native/vendor contains cgif v0.5.3 by Daniel Pape, distributed under the MIT
+license. See native/vendor/LICENSE. The retained vendor changes check allocation
+failure and initialize pow2LCT; they do not change the encoding algorithm.

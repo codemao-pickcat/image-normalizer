@@ -1,0 +1,117 @@
+name: Publish GitHub Package
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: startsWith(github.ref, 'refs/tags/v')
+    uses: ./.github/workflows/ci.yml
+
+  pack:
+    needs: verify
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Verify release identity
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          node --input-type=module -e '
+            import assert from "node:assert/strict";
+            import { readFileSync } from "node:fs";
+            const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+            assert.equal(pkg.name, "@codemao-pickcat/image-normalizer");
+            assert.equal(process.env.RELEASE_TAG, `v${pkg.version}`);
+            assert.equal(pkg.publishConfig.registry, "https://npm.pkg.github.com");
+          '
+      - name: Build and test the release tarball
+        run: |
+          mkdir -p "$RUNNER_TEMP/image-normalizer"
+          npm pack --pack-destination "$RUNNER_TEMP/image-normalizer"
+          set -- "$RUNNER_TEMP/image-normalizer/"*.tgz
+          [ "$#" -eq 1 ]
+          node scripts/package-smoke.mjs "$1"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: npm-package
+          path: ${{ runner.temp }}/image-normalizer/*.tgz
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: pack
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      packages: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: npm-package
+          path: ${{ runner.temp }}/image-normalizer
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://npm.pkg.github.com
+          scope: "@codemao-pickcat"
+          package-manager-cache: false
+      - name: Publish the verified artifact
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          cd "$RUNNER_TEMP/image-normalizer"
+          set -- ./*.tgz
+          [ "$#" -eq 1 ]
+          tar -xOf "$1" package/package.json > metadata.json
+          node --input-type=module -e '
+            import assert from "node:assert/strict";
+            import { readFileSync } from "node:fs";
+            const pkg = JSON.parse(readFileSync("metadata.json", "utf8"));
+            assert.equal(pkg.name, "@codemao-pickcat/image-normalizer");
+            assert.equal(process.env.RELEASE_TAG, `v${pkg.version}`);
+          '
+          version="${RELEASE_TAG#v}"
+          expected="sha512-$(openssl dgst -sha512 -binary "$1" | openssl base64 -A)"
+          if published=$(npm view "@codemao-pickcat/image-normalizer@$version" dist.integrity --registry https://npm.pkg.github.com 2>/dev/null); then
+            if [ "$published" != "$expected" ]; then
+              echo "::error::Published version has a different integrity; bump the version."
+              exit 1
+            fi
+          else
+            npm publish "$1" --ignore-scripts --access public --registry https://npm.pkg.github.com
+          fi
+          npm view "@codemao-pickcat/image-normalizer@$version" dist.integrity --registry https://npm.pkg.github.com > integrity.txt
+          [ "$(cat integrity.txt)" = "$expected" ]
+          shasum -a 256 "$1" > SHA256SUMS
+      - name: Attach artifact to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          cd "$RUNNER_TEMP/image-normalizer"
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release already exists."
+          else
+            gh release create "$RELEASE_TAG" ./*.tgz SHA256SUMS --verify-tag --title "$RELEASE_TAG" --generate-notes
+          fi
