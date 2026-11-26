@@ -113,6 +113,7 @@ import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { ImageNormalizer, ImageNormalizationError, ImageNormalizerPool, WebpNormalizer, GifNormalizer, assertValidGifFile } from "@codemao-pickcat/image-normalizer";
 const require = createRequire(import.meta.url);
+assert.equal(require("@codemao-pickcat/image-normalizer").ImageNormalizer, ImageNormalizer);
 assert(!Object.keys(require.cache).some((path) => /sharp|gif-native/.test(path)));
 const normalizer = new ImageNormalizer({ maxWorkers: 1 });
 try {

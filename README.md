@@ -15,7 +15,7 @@
 ```
 
 ```sh
-npm install --save-exact @codemao-pickcat/image-normalizer@0.1.1
+npm install --save-exact @codemao-pickcat/image-normalizer@0.1.2
 ```
 
 GitHub Packages 的 npm 安装需要认证。GitHub Actions 使用获得包读取权限的 `GITHUB_TOKEN`；其他环境使用有 `read:packages` 权限的令牌。参见 [GitHub npm registry 文档](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry)。

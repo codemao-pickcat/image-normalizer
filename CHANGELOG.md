@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2
+
+- 为 Node.js 24+ CommonJS 工具提供默认导出条件，支持 Drizzle Kit 读取使用共享校验器的 schema。
+- 安装产物测试同时验证 ESM import 和 CommonJS require，确保根入口仍不加载原生编码器。
+
 ## 0.1.1
 
 - 暴露仅限隔离子进程使用的 worker 入口，宿主可复用 WebP/GIF 重编码及 GIF 帧解码。
