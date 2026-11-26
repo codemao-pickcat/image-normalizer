@@ -6,6 +6,7 @@ import type {
   ImageNormalizerRequest,
   ImageNormalizerResult,
   ImageNormalizerTask,
+  ImageNormalizerCustomTask,
 } from "./image-normalizer-protocol.js";
 
 /** 子进程池的服务端执行策略；不向 HTTP 调用方开放，测试可替换 worker。 */
@@ -25,7 +26,7 @@ export type ImageNormalizerRunOptions = {
 
 type Job = {
   id: string;
-  task: ImageNormalizerTask;
+  task: ImageNormalizerCustomTask;
   signal: AbortSignal;
   abort: () => void;
   timer: ReturnType<typeof setTimeout>;
@@ -58,6 +59,7 @@ type Worker = {
 export class ImageNormalizerPool {
   private readonly workers = new Set<Worker>();
   private readonly workerUrl: URL;
+  private readonly hasCustomWorker: boolean;
   private readonly maxWorkers: number;
   private readonly maxTasks: number;
   private readonly maxRss: number;
@@ -66,6 +68,7 @@ export class ImageNormalizerPool {
   private stopped = false;
 
   constructor(options: ImageNormalizerPoolOptions = {}) {
+    this.hasCustomWorker = options.workerUrl !== undefined;
     this.maxWorkers = options.maxWorkers ?? 1;
     this.maxTasks = options.maxTasksPerWorker ?? 100;
     this.maxRss = options.maxWorkerRssBytes ?? 256 * 1024 * 1024;
@@ -101,6 +104,30 @@ export class ImageNormalizerPool {
   /** 分配独占进程并等待 result 与 ready；满载不排队，任务失败不自动重放。 */
   run(
     task: ImageNormalizerTask,
+    options: ImageNormalizerRunOptions,
+  ): Promise<void> {
+    return this.execute(task, options);
+  }
+
+  /** 宿主扩展任务复用同一组槽位和故障回收协议；必须显式提供受信任的 workerUrl。 */
+  runCustom(
+    task: ImageNormalizerCustomTask,
+    options: ImageNormalizerRunOptions,
+  ): Promise<void> {
+    if (!this.hasCustomWorker)
+      return Promise.reject(
+        new ImageNormalizationError(
+          "INVALID_IMAGE",
+          "Custom tasks require an explicitly configured worker",
+          { reason: "CUSTOM_WORKER_REQUIRED" },
+        ),
+      );
+    return this.execute(task, options);
+  }
+
+  /** 内置和扩展任务走同一名额分配，不能通过任务种类绕过总并发预算。 */
+  private execute(
+    task: ImageNormalizerCustomTask,
     options: ImageNormalizerRunOptions,
   ): Promise<void> {
     if (this.stopped || options.signal.aborted)
@@ -280,15 +307,20 @@ export class ImageNormalizerPool {
     const job = worker.job;
     if (!job || worker.retiring) return;
     worker.ready = false;
-    const message: ImageNormalizerRequest = {
+    const message: ImageNormalizerRequest<ImageNormalizerCustomTask> = {
       type: "task",
       id: job.id,
       task: job.task,
     };
-    worker.child.send(message, (error) => {
-      if (error && worker.job === job)
-        this.retire(worker, processingUnavailable());
-    });
+    try {
+      worker.child.send(message, (error) => {
+        if (error && worker.job === job)
+          this.retire(worker, processingUnavailable());
+      });
+    } catch {
+      // JSON IPC 遇到 BigInt/循环引用会同步抛错；按普通失败等待 close，不能带走宿主进程。
+      this.retire(worker, invalidImage());
+    }
   }
 
   /** 即使 IPC 曾报告成功，未确认 ready 的任务也必须随进程退出后才结束。 */

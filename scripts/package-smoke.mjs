@@ -44,6 +44,34 @@ try {
     tarball = join(directory, packed[0].filename);
   }
   await writeFile(
+    join(directory, "host-worker.mjs"),
+    `
+import { readFile, writeFile } from "node:fs/promises";
+import { normalizeWebp, normalizeGif, decodeGifFrames } from "@codemao-pickcat/image-normalizer/worker";
+let busy = false;
+process.once("disconnect", () => process.exit(0));
+process.on("message", async ({ id, task }) => {
+  if (busy) process.exit(1);
+  busy = true;
+  let result = "INVALID";
+  try {
+    if (task.kind === "WEBP") result = await normalizeWebp(task.payload);
+    else if (task.kind === "GIF") result = await normalizeGif(task.payload);
+    else if (task.kind === "CUSTOM") {
+      const frames = [...decodeGifFrames(await readFile(task.payload.inputPath))];
+      await writeFile(task.payload.outputPath, JSON.stringify({ pid: process.pid, frames: frames.length }));
+      result = "OK";
+    }
+    process.send({ type: "result", id, result });
+    await new Promise((resolve) => setImmediate(resolve));
+    busy = false;
+    process.send({ type: "ready", id, rss: process.memoryUsage.rss() });
+  } catch { process.exit(1); }
+});
+process.send({ type: "ready", rss: process.memoryUsage.rss() });
+`,
+  );
+  await writeFile(
     join(directory, "package.json"),
     JSON.stringify({ private: true, type: "module" }),
   );
@@ -83,8 +111,9 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { ImageNormalizer, ImageNormalizationError } from "@codemao-pickcat/image-normalizer";
+import { ImageNormalizer, ImageNormalizationError, ImageNormalizerPool, WebpNormalizer, GifNormalizer, assertValidGifFile } from "@codemao-pickcat/image-normalizer";
 const require = createRequire(import.meta.url);
+assert.equal(require("@codemao-pickcat/image-normalizer").ImageNormalizer, ImageNormalizer);
 assert(!Object.keys(require.cache).some((path) => /sharp|gif-native/.test(path)));
 const normalizer = new ImageNormalizer({ maxWorkers: 1 });
 try {
@@ -101,7 +130,21 @@ try {
   const controller = new AbortController(); controller.abort();
   await assert.rejects(normalizer.normalize({ inputPath: "input.webp", outputPath: "cancel.webp", format: "webp", signal: controller.signal }), (error) => error instanceof ImageNormalizationError && error.code === "UNAVAILABLE");
 } finally { await normalizer.stop(); }
-console.log("Installed package WebP/GIF smoke passed");
+const pool = new ImageNormalizerPool({ workerUrl: new URL("./host-worker.mjs", import.meta.url) });
+const webp = new WebpNormalizer({ pool });
+const gif = new GifNormalizer({ pool });
+try {
+  await webp.normalize({ inputPath: "input.webp", outputPath: "host.webp", dimensions: { width: 8, height: 4 } });
+  await gif.normalize({ inputPath: "input.gif", outputPath: "host.gif", dimensions: await assertValidGifFile("input.gif") });
+  for (const outputPath of ["custom-one", "custom-two"]) {
+    await pool.runCustom({ kind: "CUSTOM", payload: { inputPath: "input.gif", outputPath } }, { signal: new AbortController().signal, timeoutMs: 30_000 });
+  }
+  const first = JSON.parse(await readFile("custom-one", "utf8"));
+  const second = JSON.parse(await readFile("custom-two", "utf8"));
+  assert.equal(first.frames, 2);
+  assert.equal(first.pid, second.pid);
+} finally { await Promise.all([webp.stop(), gif.stop(), pool.stop()]); }
+console.log("Installed package WebP/GIF and custom worker smoke passed");
 `,
   );
   process.stdout.write(run(process.execPath, ["smoke.mjs"], directory));

@@ -15,7 +15,7 @@
 ```
 
 ```sh
-npm install --save-exact @codemao-pickcat/image-normalizer@0.1.0
+npm install --save-exact @codemao-pickcat/image-normalizer@0.1.2
 ```
 
 GitHub Packages 的 npm 安装需要认证。GitHub Actions 使用获得包读取权限的 `GITHUB_TOKEN`；其他环境使用有 `read:packages` 权限的令牌。参见 [GitHub npm registry 文档](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry)。
@@ -59,6 +59,10 @@ await normalizer.stop();
 路径只能由服务端生成，输入和输出置于调用方独占的临时目录；调用方负责接收文件、控制并发上传及清理临时文件。输出路径必须不存在。失败时可能有部分输出，调用方必须丢弃；Promise 完成后该任务已停止写入，才可清理。不要将 HTTP 输入直接当文件路径。
 
 高级接口包括 `WebpNormalizer`、`GifNormalizer`、`ImageNormalizerPool` 和容器校验函数。校验器检查结构，不能代替清洗；高级 normalizer 的 `dimensions` 必须来自对同一不可变输入的校验。
+
+宿主需要让其他媒体任务共享同一进程预算时，可显式设置 `ImageNormalizerPool({ workerUrl })`，再通过 `runCustom({ kind, payload }, { signal, timeoutMs })` 分配扩展任务。默认 worker 不接受扩展任务。扩展任务继续受同一并发、硬时限、任务身份、`result → ready` 握手和进程回收约束；宿主 worker 必须实现公开的 `ImageNormalizerRequest<Task>` / `ImageNormalizerResponse` 协议。
+
+`@codemao-pickcat/image-normalizer/worker` 导出 `normalizeWebp`、`normalizeGif` 和 `decodeGifFrames`，供宿主的隔离 worker 复用。此入口会加载 Sharp/native，**不能在 HTTP 主进程导入**。worker 路径和扩展载荷必须由受信任的宿主代码构造，不接受网络调用方指定的脚本或命令。开发环境需要 TS loader 时由宿主 JS bootstrap 显式注册，清洗器仍使用固定 heap 参数及环境白名单。
 
 ## 边界与预算
 

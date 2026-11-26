@@ -106,6 +106,87 @@ async function output(
 }
 
 describe("媒体子进程池", () => {
+  it.each(["cold", "ready"] as const)(
+    "%s worker 拒绝不可序列化的扩展载荷，并恢复同一池的可用名额",
+    async (state) => {
+      const ctx = await context();
+      if (state === "ready") await ctx.pool.start();
+      const cyclic: Record<string, unknown> = {};
+      cyclic.self = cyclic;
+      for (const invalid of [1n, cyclic]) {
+        await expect(
+          ctx.pool.runCustom(
+            { kind: "CUSTOM", payload: invalid },
+            { signal: new AbortController().signal, timeoutMs: 2000 },
+          ),
+        ).rejects.toMatchObject({ code: "INVALID_IMAGE" });
+        await ctx.request().run();
+      }
+    },
+  );
+
+  it("默认 worker 不接受宿主扩展任务", async () => {
+    const pool = new ImageNormalizerPool();
+    try {
+      await expect(
+        pool.runCustom(
+          { kind: "EMOJI_WEBP", payload: {} },
+          { signal: new AbortController().signal, timeoutMs: 1000 },
+        ),
+      ).rejects.toMatchObject({
+        code: "INVALID_IMAGE",
+        details: { reason: "CUSTOM_WORKER_REQUIRED" },
+      });
+    } finally {
+      await pool.stop();
+    }
+  });
+
+  it("扩展任务与内置任务共用进程和总并发预算", async () => {
+    const ctx = await context({ maxWorkers: 1 });
+    const signal = new AbortController().signal;
+    const customPath = join(ctx.directory, "custom-output");
+    const custom = ctx.pool.runCustom(
+      {
+        kind: "EMOJI_WEBP",
+        payload: { inputPath: "slow", outputPath: customPath },
+      },
+      { signal, timeoutMs: 2000 },
+    );
+    await expect(ctx.request().run()).rejects.toMatchObject({
+      code: "UNAVAILABLE",
+    });
+    await custom;
+    const builtin = ctx.request();
+    await builtin.run();
+    expect((await output(customPath)).pid).toBe(
+      (await output(builtin.outputPath)).pid,
+    );
+    expect((await output(customPath)).kind).toBe("EMOJI_WEBP");
+  });
+
+  it("扩展任务取消等待真实进程退出，不影响随后复用的任务", async () => {
+    const ctx = await context();
+    const controller = new AbortController();
+    const outputPath = join(ctx.directory, "custom-hold");
+    const result = expect(
+      ctx.pool.runCustom(
+        { kind: "EMOJI_WEBP", payload: { inputPath: "hold", outputPath } },
+        { signal: controller.signal, timeoutMs: 2000 },
+      ),
+    ).rejects.toMatchObject({ code: "UNAVAILABLE" });
+    await expect
+      .poll(() => output(outputPath).catch(() => undefined))
+      .toBeDefined();
+    const pid = (await output(outputPath)).pid;
+    controller.abort();
+    await result;
+    expect(() => process.kill(pid, 0)).toThrow();
+    const next = ctx.request();
+    await next.run();
+    expect((await output(next.outputPath)).pid).not.toBe(pid);
+  });
+
   it("重复预热和跨格式任务复用同一进程，停服回收空闲进程", async () => {
     const ctx = await context();
     await Promise.all([ctx.pool.start(), ctx.pool.start()]);
