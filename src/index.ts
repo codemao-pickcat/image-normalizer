@@ -12,6 +12,7 @@ export {
 export {
   ImageNormalizerPool,
   type ImageNormalizerPoolOptions,
+  type ImageNormalizerRunOptions,
 } from "./image-normalizer-process.js";
 export {
   WebpNormalizer,
@@ -30,12 +31,14 @@ export {
   assertDecodableStaticWebpFile,
   assertValidStaticWebp,
   assertValidStaticWebpFile,
+  stripStaticWebpMetadata,
   type StaticWebpDimensions,
   type WebpInvalidReason,
 } from "./webp-validator.js";
 export {
   assertValidGif,
   assertValidGifFile,
+  sameGifDimensions,
   type GifDimensions,
   type GifValidationOptions,
   GIF_MAX_FRAMES,
@@ -48,3 +51,11 @@ export {
   MAX_PIXELS,
   NORMALIZATION_VERSION,
 } from "./limits.js";
+
+export type {
+  ImageNormalizerTask,
+  ImageNormalizerCustomTask,
+  ImageNormalizerRequest,
+  ImageNormalizerResponse,
+  ImageNormalizerResult,
+} from "./image-normalizer-protocol.js";

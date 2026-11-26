@@ -115,3 +115,8 @@ jobs:
           else
             gh release create "$RELEASE_TAG" ./*.tgz SHA256SUMS --verify-tag --title "$RELEASE_TAG" --generate-notes
           fi
+      - name: Verify package repository and access metadata
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api orgs/codemao-pickcat/packages/npm/image-normalizer --jq '{name, visibility, repository: .repository.full_name, html_url, version_count}'

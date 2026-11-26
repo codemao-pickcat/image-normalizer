@@ -1,6 +1,6 @@
 {
   "name": "@codemao-pickcat/image-normalizer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Bounded WebP and GIF sanitization in isolated Node.js worker processes",
   "type": "module",
   "license": "MIT",
@@ -23,6 +23,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "import": "./dist/worker.js"
     }
   },
   "files": [
